@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="I let Claude Code drive a real SO-101 arm live, one skill call at a time." />
+    <meta name="author" content="Krish Pandya" />
+    <meta name="robots" content="noindex" />
+    <meta property="og:title" content="Code as policy on a real SO-101" />
+    <meta property="og:description" content="I let Claude Code drive a real SO-101 arm live, one skill call at a time." />
+    <meta property="og:image" content="https://mostlykiguess.github.io/so101-code-as-policy/media/rerun-push2.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="/assets/images/favicon.png" />
+    <link rel="stylesheet" href="/style.css?v=9" />
+    <style>
+      main { max-width: 900px; }
+      h2 { margin: 3rem 0 0.9rem; }
+      h3 { font-size: 1.05rem; margin: 1.8rem 0 0.45rem; }
+      figure.wide { margin: 1.4rem 0 2rem; }
+      figure.wide img, figure.wide video { display: block; width: 100%; height: auto; border: 1px solid var(--rule); border-radius: 8px; }
+      figure.wide figcaption { font-size: 0.88rem; color: var(--muted); margin-top: 0.5rem; }
+      figure.wide.small img { max-width: 620px; margin: 0 auto; }
+      figure.wide.small figcaption { text-align: center; }
+      ul.learned li { margin-bottom: 0.55rem; }
+      table { width: 100%; border-collapse: collapse; margin: 1rem 0 1.4rem; font-size: 0.95rem; }
+      th, td { border-bottom: 1px solid var(--rule); padding: 0.45rem 1rem 0.45rem 0; text-align: left; vertical-align: top; }
+      td:first-child { white-space: nowrap; }
+      #viewer { width: 100%; aspect-ratio: 16 / 10; margin: 1.4rem 0 0.5rem; border: 1px solid var(--rule);
+                border-radius: 8px; display: flex; align-items: center; justify-content: center;
+                background: #0d1011; color: #cfd3d6; overflow: hidden; }
+      #viewer button { font: inherit; padding: 0.6rem 1.2rem; border-radius: 6px; border: 1px solid #3a3f44;
+                       background: #1b1f22; color: #e8eaec; cursor: pointer; }
+      .viewer-note { font-size: 0.88rem; color: var(--muted); margin: 0 0 2rem; }
+    </style>
+    <title>Code as policy on a real SO-101 - Krish Pandya</title>
+  </head>
+  <body>
+    <main>
+      <header class="intro">
+        <div class="intro-text">
+          <h1>Code as policy on a real SO-101</h1>
+          <p>
+            I wanted to see how far Claude Code gets on a real robot arm if you just let it drive. So it got an
+            SO-101 and one webcam, and it ran the arm live, one skill call at a time.
+            After every call it looks at the camera, and it <i>only</i> ticks something off when the frame says it is
+            done. When things break (and they do, you still have to guide it), we fix the skill instead of the run, so whatever
+            comes next starts with the fix.
+          </p>
+          <p>
+              We really have to build it so that it is forced to judge as it goes, like humans. That is how
+              these MLLMs can catch unexpected behaviors. They can also figure things out on <i>their own</i>.
+              Forcing it to make a world model, MuJoCo here, catches things which are expensive to catch in real life,
+            and we need to find ways to model the world better for a given task!
+          </p>
+          <p>The full setup will be open-sourced soon.</p>
+          <p class="text-links">
+            <a href="#video">Video</a> /
+            <a href="#recording">Recording</a> /
+            <a href="#run">The run</a> /
+            <a href="#learned">What I learned</a> /
+            <a href="#skills">Skills</a> /
+            <a href="/">Home</a>
+          </p>
+        </div>
+      </header>
+
+      <h2 id="video">The task</h2>
+      <p>
+        "Pick up the pen and put it out of the way, then push the mouse until it touches the cat's cushion,
+        then point at the remote." The cat is a plush toy, no cats were pushed.
+      </p>
+      <figure class="wide">
+        <video controls preload="metadata" poster="media/demo-poster.jpg" src="media/demo.mp4"></video>
+        <figcaption>Filmed on my phone, nothing sped up.</figcaption>
+      </figure>
+
+      <h2 id="recording">The recording</h2>
+      <p>
+        Everything it saw and did is in one Rerun recording, and you can scrub through it right here. The
+        viewer is about 60 MB, so it waits for a click. Or <a href="media/demo.rrd">grab the .rrd</a>.
+      </p>
+      <div id="viewer"><button id="load-viewer">Load the recording</button></div>
+      <p class="viewer-note">Rerun 0.40 in the browser. Works best on a laptop.</p>
+      <script type="module">
+        document.getElementById("load-viewer").addEventListener("click", async () => {
+          const parent = document.getElementById("viewer");
+          parent.textContent = "Loading the viewer...";
+          const { WebViewer } = await import("./rerun/index.js");
+          parent.textContent = "";
+          const viewer = new WebViewer();
+          await viewer.start(new URL("media/demo.rrd", location.href).href, parent,
+                             { width: "100%", height: "100%", hide_welcome_screen: true });
+        });
+      </script>
+      <figure class="wide">
+        <img src="media/rerun-push2.jpg" alt="Rerun during push 2: the camera with the objects boxed, the planned push line and the predicted end of the mouse, the arm model, the plan with two ticks, the code and the log." />
+        <figcaption>Push 2. The purple line is the push it planned, the box is where it expected the mouse to end up.</figcaption>
+      </figure>
+
+      <h2 id="run">The run</h2>
+      <p>
+        OWLv2 finds each object from a text prompt, SAM 2.1 cuts it out, and a homography puts it on the
+        table in cm. That is all it knows about the desk.
+      </p>
+      <figure class="wide">
+        <img src="media/sam-masks.jpg" alt="The camera with SAM masks: the mouse in blue, the pen in green, the remote in red, the cushion in yellow around the cat, and the arm." />
+        <figcaption>What it sees.</figcaption>
+      </figure>
+      <figure class="wide">
+        <img src="media/take-frames.jpg" alt="The camera at the start, with the pen lifted, the pen put aside, after each push, and pointing at the remote." />
+        <figcaption>The camera after each step. 2 min 39 s from the first look to back home.</figcaption>
+      </figure>
+      <figure class="wide">
+        <img src="media/take-mujoco.jpg" alt="The same six moments in MuJoCo: the arm model with the pen, mouse, cushion, cat and remote placed from the camera." />
+        <figcaption>Its own MuJoCo copy of the desk, rebuilt from the camera after every move.</figcaption>
+      </figure>
+      <p>
+        Before each push it predicts how far the mouse will go, then measures it. On the first push it guessed
+        18.1 cm and got 9.9, so it refit and guessed 6.3 for the second one, which went 9.3 and put the mouse
+        against the cushion.
+      </p>
+      <figure class="wide">
+        <img src="media/rerun-end.jpg" alt="Rerun at the end: four ticks, the mouse against the cushion, the pointing line to the remote, and the log with each tick's evidence." />
+        <figcaption>All four ticked, each with its camera evidence in the log.</figcaption>
+      </figure>
+
+      <h2 id="learned">What I learned</h2>
+
+      <h3>1. You need a live system that judges as it goes, like we do</h3>
+      <p>
+        Judging every frame as it went, it caught its first push spinning the mouse into the base, and
+        changed where it pushes.
+      </p>
+      <figure class="wide">
+        <img src="media/push-centre.jpg" alt="Top: a push ahead of the mouse's centre spins it into the arm's base. Bottom: a push through its centre moves it toward the cushion." />
+        <figcaption>Top: pushed in front of its centre, the mouse spins into the base. Bottom: pushed through the centre.</figcaption>
+      </figure>
+
+      <h3>2. It figures things out on its own</h3>
+      <p>
+        The straight push was out of reach, so it turned the push 15 degrees and leaned the jaw 20 to get
+        there. It came up with that itself after a few earlier pushes could not reach, added it to the skill,
+        and used it here. These models can pick things up on their own if you leave them room, so I would
+        not be surprised to see the bitter lesson show up here too.
+      </p>
+      <figure class="wide">
+        <video autoplay loop muted playsinline poster="media/push1-clip-poster.jpg" src="media/push1-clip.mp4"></video>
+        <figcaption>Push 1, the turned and leaned push it chose.</figcaption>
+      </figure>
+
+      <h3>3. Modelling is worth it</h3>
+      <p>
+        Every step ran first in a MuJoCo copy of the arm and the desk. Finding out you can't reach something
+        costs nothing there. On the real arm it costs a failed move, or something on the floor. The copy
+        caught three of these before the arm ever moved:
+      </p>
+      <ul>
+        <li>it could not carry the pen at the 10 cm it asked for, only 9 to 9.5,</li>
+        <li>the first push had to start where the jaw could not reach pointing straight down, so it leans out instead (below),</li>
+        <li>pointing at the remote was impossible until it aimed from the joint the arm actually turns around, not the middle of the base.</li>
+      </ul>
+      <figure class="wide small">
+        <img src="media/mujoco-push.jpg" alt="MuJoCo: the arm stretched out past the mouse with the jaw leaned, coming down on the mouse's far side." />
+        <figcaption>The leaned push start, worked out in MuJoCo before the real arm tried it.</figcaption>
+      </figure>
+
+      <h3>4. Go around obstacles, not past them</h3>
+      <p>
+        The first move out of rest went straight for its target, swinging the gripper sideways while it was
+        still low, right next to the pen, and knocked it.
+      </p>
+      <figure class="wide">
+        <img src="media/pen-corner.jpg" alt="Left: the pen lying straight. Right: the same pen knocked crooked after the arm swept past it low." />
+        <figcaption>The pen before and after that move.</figcaption>
+      </figure>
+      <p>Now every move goes up first, across at 8 cm, then down.</p>
+      <figure class="wide">
+        <img src="media/paths.jpg" alt="MuJoCo, two panels. Left: the gripper tip's path in red, a low sideways arc from rest. Right: the path in green, straight up, across at 8 cm, then down." />
+        <figcaption>The gripper tip's path for that move, the old way and the new way.</figcaption>
+      </figure>
+
+      <h2 id="skills">Skills</h2>
+      <p>The library as it stands. Each skill checks its own result and says what it measured.</p>
+      <table>
+        <tr><th>Skill</th><th>What it does</th></tr>
+        <tr><td><code>look()</code></td><td>Where everything is on the table, in cm.</td></tr>
+        <tr><td><code>pick_pen()</code></td><td>Jaws across the pen, grasp, lift, check it left the table.</td></tr>
+        <tr><td><code>place_pen()</code></td><td>Carry, turn, drop, check where it landed.</td></tr>
+        <tr><td><code>push_mouse()</code></td><td>Predict, push through the centre, measure, refit.</td></tr>
+        <tr><td><code>point_at_remote()</code></td><td>Point the jaw at the remote, check where the ray lands.</td></tr>
+        <tr><td><code>park()</code>, <code>home()</code></td><td>Out of the camera's way, or back to rest.</td></tr>
+      </table>
+      <p>
+        Code: <a href="code/skills.py">skills.py</a>, <a href="code/kinematics.py">kinematics.py</a>,
+        <a href="code/sam.py">sam.py</a>, <a href="code/sam_server.py">sam_server.py</a>,
+        <a href="code/scene.py">scene.py</a>, <a href="code/demo.py">demo.py</a> and <a href="code/act.py">act.py</a>.
+      </p>
+
+      <h2 id="credits">Credits</h2>
+      <p>
+        Idea, setup and this page by me (MostlyK). Claude Code wrote the code, drove the arm and drafted
+        parts of this page, and I reviewed all of it. Built on
+        <a href="https://github.com/huggingface/lerobot">LeRobot</a> (calibration),
+        <a href="https://github.com/wig-nesh/so101-inverse-kinematics">so101-inverse-kinematics</a> (URDF and MuJoCo model),
+        <a href="https://huggingface.co/google/owlv2-large-patch14-ensemble">OWLv2</a> and
+        <a href="https://github.com/facebookresearch/sam2">SAM 2.1</a> (perception) and
+        <a href="https://rerun.io">Rerun</a> (recording).
+      </p>
+    </main>
+  </body>
+</html>

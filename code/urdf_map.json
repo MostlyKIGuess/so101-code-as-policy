@@ -1,0 +1,9 @@
+{
+  "_source": "urdf_degrees = sign * scale * bus_value + offset_deg. Signs from the nudges in runs/nudge/ checked against renders in runs/urdf-map/. Offsets from holding the arm by hand in the URDF zero pose on 24 Oct (runs/urdf-map/zero-pose-joints.tsv rows 719-783: pan -24.4, lift 92.0, elbow -75.9, wrist_flex 0.9, wrist_roll 2.8, gripper 9.7 with jaws closed). The rest pose rendered with these offsets matches setup/side.png (runs/urdf-map/rest-two-offsets.png, left). Gripper scale is the motor's 138.3 degrees over its 100 percent range (so101/lerobot/cap_so101.json). Wrist_Roll's sign is the least sure: it rests on a small render and one nudge.",
+  "shoulder_pan": {"urdf": "Rotation", "sign": -1, "scale": 1.0, "offset_deg": -24.4},
+  "shoulder_lift": {"urdf": "Pitch", "sign": 1, "scale": 1.0, "offset_deg": -92.0},
+  "elbow_flex": {"urdf": "Elbow", "sign": 1, "scale": 1.0, "offset_deg": 75.9},
+  "wrist_flex": {"urdf": "Wrist_Pitch", "sign": 1, "scale": 1.0, "offset_deg": -0.9},
+  "wrist_roll": {"urdf": "Wrist_Roll", "sign": 1, "scale": 1.0, "offset_deg": -2.8},
+  "gripper": {"urdf": "Jaw", "sign": 1, "scale": 1.383, "offset_deg": -13.4}
+}
